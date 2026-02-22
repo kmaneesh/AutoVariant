@@ -628,29 +628,24 @@ def build_report(record, sample_name: str | None = None) -> str:
 
     # 1. Variant sentence
     line1 = f"A {zygosity_label} {effect_text} variant {coding} in {gene} gene ({locus}; Depth:{depth_str}) was detected."
-    lines.append("1.")
-    lines.append(line1)
+    lines.append("1. " + line1)
     lines.append("")
 
     # 2. Amino acid change (use residue properties from AutoVariant.mdc when available)
     if protein and protein != "p?" and "?" not in protein:
-        lines.append("2.")
-        lines.append(_format_amino_acid_change(protein))
+        lines.append("2. " + _format_amino_acid_change(protein))
     else:
-        lines.append("2.")
-        lines.append("No protein change reported or variant is non-coding.")
+        lines.append("2. No protein change reported or variant is non-coding.")
     lines.append("")
 
     # 3. Gene/protein impact
-    lines.append("3.")
     if disease:
-        lines.append(f"This variant is associated with {disease}. Consult ClinVar, Franklin Genoox, VarSome and literature (PubMed / population databases) for detailed evidence.")
+        lines.append("3. " + f"This variant is associated with {disease}. Consult ClinVar, Franklin Genoox, VarSome and literature (PubMed / population databases) for detailed evidence.")
     else:
-        lines.append("Consult ClinVar, Franklin Genoox, VarSome and literature (PubMed / population databases) for how this variant affects the gene and protein.")
+        lines.append("3. Consult ClinVar, Franklin Genoox, VarSome and literature (PubMed / population databases) for how this variant affects the gene and protein.")
     lines.append("")
 
     # 4. Population frequencies (MyVariant.info when available)
-    lines.append("4.")
     step4_msg = None
     if alts:
         try:
@@ -658,49 +653,90 @@ def build_report(record, sample_name: str | None = None) -> str:
         except Exception:
             pass
     if step4_msg:
-        lines.append(step4_msg)
+        lines.append("4. " + step4_msg)
     else:
-        lines.append("Population frequencies (gnomAD max, ExAC) are not available in this VCF. Check Franklin Genoox variant assessment or state: absent from major databases.")
+        lines.append("4. Population frequencies (gnomAD max, ExAC) are not available in this VCF. Check Franklin Genoox variant assessment or state: absent from major databases.")
     lines.append("")
 
     # 5. ClinVar
-    lines.append("5.")
     if clnacc or clnid:
-        lines.append(f"The variant has been reported in ClinVar (Variation ID: {clnacc}; {clnid}).")
+        lines.append("5. " + f"The variant has been reported in ClinVar (Variation ID: {clnacc}; {clnid}).")
     else:
-        lines.append("The variant has not been reported in ClinVar database.")
+        lines.append("5. The variant has not been reported in ClinVar database.")
     lines.append("")
 
     # 6. In-silico
-    lines.append("6.")
     if polyphen or sift:
         pp = f"PolyPhen-2: {polyphen}" if polyphen else ""
         sf = f"SIFT: {sift}" if sift else ""
         preds = "; ".join(x for x in [pp, sf] if x)
         if (polyphen and float(polyphen) >= 0.85) or (sift and float(sift) <= 0.05):
-            lines.append(f"In-silico prediction tools suggest a deleterious effect ({preds}).")
+            lines.append("6. " + f"In-silico prediction tools suggest a deleterious effect ({preds}).")
         else:
-            lines.append(f"In-silico prediction tools: {preds or 'SIFT, REVEL, Polyphen-2, CADD, MVP — check Franklin Genoox for full assessment'}.")
+            lines.append("6. " + f"In-silico prediction tools: {preds or 'SIFT, REVEL, Polyphen-2, CADD, MVP — check Franklin Genoox for full assessment'}.")
     else:
-        lines.append("In-silico data (SIFT, REVEL, MT, Polyphen-2, CADD, MVP) not present in this VCF; check Franklin Genoox variant assessment.")
+        lines.append("6. In-silico data (SIFT, REVEL, MT, Polyphen-2, CADD, MVP) not present in this VCF; check Franklin Genoox variant assessment.")
     lines.append("")
 
     # 7. ACMG
-    lines.append("7.")
     acmg_upper = (acmg or "").upper()
     if "PATHOGENIC" in acmg_upper and "LIKELY" not in acmg_upper:
-        lines.append("Based on the aforementioned evidence, this variant is classified as pathogenic according to the ACMG AMP guidelines.")
+        lines.append("7. Based on the aforementioned evidence, this variant is classified as pathogenic according to the ACMG AMP guidelines.")
     elif "LIKELY_PATHOGENIC" in acmg_upper:
-        lines.append("Based on the aforementioned evidence, this variant is classified as likely pathogenic according to the ACMG AMP guidelines.")
+        lines.append("7. Based on the aforementioned evidence, this variant is classified as likely pathogenic according to the ACMG AMP guidelines.")
     elif "UNCERTAIN" in acmg_upper or "VUS" in acmg_upper or "SIGNIFICANCE" in acmg_upper:
-        lines.append("Based on the aforementioned evidence, this variant is classified as variant of uncertain significance according to the ACMG AMP guidelines.")
+        lines.append("7. Based on the aforementioned evidence, this variant is classified as variant of uncertain significance according to the ACMG AMP guidelines.")
     elif "BENIGN" in acmg_upper:
-        lines.append("Based on the aforementioned evidence, this variant is classified as benign / likely benign according to the ACMG AMP guidelines.")
+        lines.append("7. Based on the aforementioned evidence, this variant is classified as benign / likely benign according to the ACMG AMP guidelines.")
     else:
-        lines.append(f"ACMG classification from VCF: {acmg or 'Not available'}.")
+        lines.append("7. " + f"ACMG classification from VCF: {acmg or 'Not available'}.")
     lines.append("")
 
     return "\n".join(lines)
+
+
+def run_variant_search(
+    vcf_path: str | Path,
+    query: str,
+    sample_name: str | None = None,
+) -> str:
+    """
+    Run variant search on VCF; return 7-step report string.
+    Raises FileNotFoundError if VCF not found, ValueError if no records or no match.
+    Supports .vcf and .vcf.gz (via cyvcf2 when available).
+    """
+    vcf_path = Path(vcf_path)
+    if not vcf_path.is_file():
+        raise FileNotFoundError(f"VCF file not found: {vcf_path}")
+    sample_names, records = [], []
+    if CYVCF2_AVAILABLE:
+        try:
+            sample_names, records = _read_vcf_cyvcf2(vcf_path)
+        except Exception:
+            pass
+    if not records:
+        try:
+            sample_names, records = _read_vcf_records(vcf_path)
+        except Exception:
+            pass
+    if not records and VCFPY_AVAILABLE:
+        try:
+            sample_names, records = _read_vcf_vcfpy(vcf_path)
+        except Exception:
+            pass
+    if not records:
+        raise ValueError("No VCF records could be read.")
+    found = None
+    for record in records:
+        if match_record(record, query):
+            found = record
+            break
+    if found is None:
+        raise ValueError(f"No variant found for search: {query}")
+    return build_report(
+        found,
+        sample_name or (sample_names[0] if sample_names else None),
+    )
 
 
 def main() -> int:

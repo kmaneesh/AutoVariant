@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AutoVariant</title>
+  <link rel="stylesheet" href="/static/css/site.css">
+  <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+</head>
+<body>
+  <div class="page-wrap">
+    <div class="main-content">
+      <header class="page-header">
+        <h1>AutoVariant</h1>
+        <p class="muted">Search a VCF by gene symbol or location; view the 7-step variant message (SOP).</p>
+      </header>
+
+      <section class="panel">
+        <label for="search-query">Gene or location</label>
+        <input type="text" id="search-query" name="query" placeholder="e.g. FAH, 80472479, chr15:80472479" autocomplete="off" />
+
+        <label for="vcf-select">VCF file</label>
+        <select id="vcf-select" name="vcf_path">
+          <option value="">— Select a VCF —</option>
+        </select>
+
+        <button type="button" id="search-btn">Search</button>
+
+        <div id="search-result" class="search-result variant-message" aria-live="polite"></div>
+      </section>
+    </div>
+  </div>
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js" integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+  <script src="/static/js/app.js" defer></script>
+</body>
+</html>

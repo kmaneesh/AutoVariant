@@ -224,7 +224,7 @@ def print_row(
 
 
 def main():
-    vcf_path = sys.argv[1] if len(sys.argv) > 1 else "WES166_26032846_BSC_OUT.vcf"
+    vcf_path = sys.argv[1] if len(sys.argv) > 1 else "data/WES166_26032846_BSC_OUT.vcf"
     path = Path(vcf_path)
     if not path.exists():
         print(f"File not found: {path}", file=sys.stderr)
