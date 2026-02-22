@@ -188,54 +188,43 @@ def print_row(
     # FORMAT and per-sample values from cyvcf2 directly
     if record.FORMAT:
         keys = list(record.FORMAT)
-        print("\nFORMAT (field names):")
-        print("  " + ":".join(keys))
+        # print("\nFORMAT (field names):")
+        # print("  " + ":".join(keys))
         raw = record.format(keys[0])
         n_s = len(raw) if raw is not None else 0
         if n_s > 0:
             idx = (n_s + sample_index) if sample_index < 0 else sample_index
             idx = max(0, min(idx, n_s - 1))
-            print("\nPer-sample (format values):")
-            for k in keys:
-                v = _format_value_for_display(record, k, idx)
-                print(f"  {k}: {v}")
+            format_dict = {k: _format_value_for_display(record, k, idx) for k in keys}
+            print("\nPer-sample (format values):", format_dict)
 
-    print("\nINFO (as dict):")
-    desc_map = info_descriptions if info_descriptions is not None else {}
-    for k, v in sorted(info_dict.items()):
-        if k in ("Exomiser", "FUNC"):
-            line = f"  {k}: (see below as header + rows)"
-        else:
-            line = f"  {k}: {v}"
-        if print_description:
-            desc = desc_map.get(k, "")
-            if desc:
-                line = f"{line}  # {desc}"
-        print(line)
+    print("\nINFO:", info_dict)
 
     if exomiser_header is not None and exomiser_rows is not None:
-        print("\nExomiser (header, rows) — to dict: dict(zip(header, row)):")
-        print("  header:", exomiser_header)
+        # print("\nExomiser (header, rows) — to dict: dict(zip(header, row)):")
+        # print("  header:", exomiser_header)
+        print("\nExomiser:")
         if not exomiser_rows:
             print("  (no entries)")
         for j, row in enumerate(exomiser_rows):
-            print(f"  row[{j}]: {row}")
+            # print(f"  row[{j}]: {row}")
             if j == 0 and row:
-                print(f"  -> dict(zip(header, row)): {dict(zip(exomiser_header, row))}")
+                print(f"{dict(zip(exomiser_header, row))}")
 
     if func_header is not None and func_rows is not None:
-        print("\nFUNC (header, rows) — to dict: dict(zip(header, row)):")
-        print("  header:", func_header)
+        # print("\nFUNC (header, rows) — to dict: dict(zip(header, row)):")
+        # print("  header:", func_header)
+        print("\nFUNC:")
         if not func_rows:
             print("  (no entries)")
         for j, row in enumerate(func_rows):
-            print(f"  row[{j}]: {row}")
+            # print(f"  row[{j}]: {row}")
             if j == 0 and row:
-                print(f"  -> dict(zip(header, row)): {dict(zip(func_header, row))}")
+                print(f"{dict(zip(func_header, row))}")
 
 
 def main():
-    vcf_path = sys.argv[1] if len(sys.argv) > 1 else "WES166_26032846_BSC_IN.vcf"
+    vcf_path = sys.argv[1] if len(sys.argv) > 1 else "WES166_26032846_BSC_OUT.vcf"
     path = Path(vcf_path)
     if not path.exists():
         print(f"File not found: {path}", file=sys.stderr)
@@ -255,7 +244,7 @@ def main():
             info_dict,
             i + 1,
             info_descriptions=info_descriptions,
-            print_description=True,
+            print_description=False,
             sample_index=-1,
             exomiser_header=exomiser_header,
             exomiser_rows=exomiser_rows,
