@@ -13,17 +13,16 @@
   function setLoading(loading) {
     searchBtn.disabled = loading;
     if (loading) {
-      searchResultEl.innerHTML = '<p class="loading"><span class="spinner" aria-hidden="true"></span> Searching…</p>';
+      searchResultEl.innerHTML = '<p class="flex items-center text-slate-500 text-sm"><span class="spinner" aria-hidden="true"></span> Searching…</p>';
     }
   }
 
   function setError(msg) {
-    searchResultEl.innerHTML = '<p class="error">' + escapeHtml(msg) + '</p>';
+    searchResultEl.innerHTML = '<div class="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">' + escapeHtml(msg) + '</div>';
   }
 
   function setMessage(text) {
-    searchResultEl.textContent = text;
-    searchResultEl.classList.add('variant-message');
+    searchResultEl.innerHTML = '<pre class="rounded-lg bg-slate-50 border border-slate-200 p-4 text-sm text-slate-800 whitespace-pre-wrap font-mono leading-relaxed overflow-x-auto">' + escapeHtml(text) + '</pre>';
   }
 
   // Load VCF list on page load and init Select2
