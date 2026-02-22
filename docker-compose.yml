@@ -2,7 +2,7 @@ services:
   app:
     build: .
     ports:
-      - "127.0.0.1:9000:9000"
+      - "9000:9000"
     environment:
       VCF_DIR: /data
     volumes:
