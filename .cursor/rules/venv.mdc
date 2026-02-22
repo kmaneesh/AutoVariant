@@ -1,0 +1,12 @@
+---
+description: Use project venv before running Python/terminal commands
+globs:
+alwaysApply: true
+---
+
+Before running any Python or install commands in this project, enable the virtual environment:
+
+- **Unix/macOS:** `source .venv/bin/activate`
+- Or run commands via: `.venv/bin/python`, `.venv/bin/pip`, etc.
+
+Ensure `.venv` is activated (or use its binaries) before executing project commands.

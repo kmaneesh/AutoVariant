@@ -1,0 +1,15 @@
+---
+description: Use AutoHPO repo as the primary reference for project structure and patterns
+globs:
+alwaysApply: true
+---
+
+# Reference Only
+
+When working on this project (AutoVariant), **refer to the AutoHPO repo first** as the guide:
+
+- **Path:** `/Users/m/Sites/genosys.in/AutoHPO`
+- **Use it for:** project structure, conventions, patterns, tooling, and similar implementation choices.
+- AutoVariant should follow the same style and organization as AutoHPO unless the user specifies otherwise.
+
+Read and align with the AutoHPO codebase when adding features, structuring modules, or making architectural decisions.

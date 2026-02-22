@@ -1,0 +1,126 @@
+---
+description: VCF (Variant Call Format) file format reference for bioinformatics
+globs: "**/*.vcf,**/*.vcf.gz,**/vcf*.py"
+alwaysApply: false
+---
+
+# VCF (Variant Call Format) — Complete Reference
+
+VCF is a standard text format for storing sequence variations (SNPs, indels, structural variants). Developed for the 1000 Genomes Project; spec is maintained by GA4GH. Latest spec: [samtools.github.io/hts-specs](https://samtools.github.io/hts-specs) (e.g. VCFv4.5). Extension: `.vcf`; binary compressed form: BCF.
+
+**References:** [Wikipedia – Variant Call Format](https://en.wikipedia.org/wiki/Variant_Call_Format), [Genomatics VCF guide](https://www.genomatics.net/guides/vcf-file-format-complete-guide), [GATK VCF](https://gatk.broadinstitute.org/hc/en-us/articles/360035531692-VCF-Variant-Call-Format), [Intro to VCF (UW)](https://faculty.washington.edu/browning/intro-to-vcf.html).
+
+---
+
+## 1. File structure (order)
+
+1. **Meta-information lines** — lines starting with `##`
+2. **Header line** — single line starting with `#CHROM` (defines column names)
+3. **Data lines** — one variant per line (VCF records), tab-separated
+
+Missing data is denoted by `.`. Records are typically sorted by CHROM then POS.
+
+---
+
+## 2. Fixed columns (first 8–9 fields)
+
+| # | Field   | Description |
+|---|--------|-------------|
+| 1 | CHROM  | Reference sequence (e.g. chromosome) name |
+| 2 | POS    | 1-based position of first base of the variant |
+| 3 | ID     | Semicolon-separated IDs (e.g. dbSNP rs IDs); `.` if unknown |
+| 4 | REF    | Reference allele (one or more A/C/G/T) |
+| 5 | ALT    | Alternate allele(s); comma-separated if multiple; `.` if no alternate |
+| 6 | QUAL   | Phred-scaled quality: −10·log₁₀(P(ALT wrong)); `.` if unknown |
+| 7 | FILTER | `PASS` or semicolon-separated list of failed filter IDs |
+| 8 | INFO   | Key=value annotations; semicolon-separated; no spaces/tabs/semicolons in values |
+| 9 | FORMAT | Colon-separated list of per-sample subfield IDs (optional; if absent, no sample columns) |
+
+Columns 10+ are sample names; each sample column has colon-separated values matching FORMAT order.
+
+---
+
+## 3. Header meta-information
+
+- **Required:** `##fileformat=VCFv4.x` (first meta line).
+- **Common:** `##fileDate=`, `##reference=`, `##source=`, `##contig=<ID=...,length=...>`.
+- **INFO definitions:** `##INFO=<ID=...,Number=...,Type=...,Description="...">`
+- **FILTER definitions:** `##FILTER=<ID=...,Description="...">`
+- **FORMAT definitions:** `##FORMAT=<ID=...,Number=...,Type=...,Description="...">`
+
+**INFO/FORMAT Number:** `A` = per ALT; `R` = per allele (ref+alt); `G` = per genotype; `1` = one value; `.` = unknown/unbounded.  
+**Type:** Integer, Float, Flag, Character, String.
+
+---
+
+## 4. Common INFO fields
+
+| ID   | Meaning |
+|------|--------|
+| AC   | Allele count in genotypes, for each ALT (order as ALT) |
+| AF   | Allele frequency for each ALT (from primary data) |
+| AN   | Total number of alleles in called genotypes |
+| DB   | dbSNP membership (Flag) |
+| DP   | Combined depth across samples |
+| END  | End position (e.g. for SVs/symbolic alleles) |
+| NS   | Number of samples with data |
+| MQ   | RMS mapping quality |
+| SOMATIC | Somatic mutation (Flag) |
+| 1000G | 1000 Genomes membership (Flag) |
+
+Custom INFO must be defined in the header.
+
+---
+
+## 5. Common FORMAT fields (per-sample)
+
+| ID | Meaning |
+|----|--------|
+| GT  | Genotype (must be first if present). Alleles: 0=REF, 1=first ALT, 2=second ALT. `/` = unphased, `\|` = phased |
+| GQ  | Genotype quality (Phred) |
+| DP  | Read depth |
+| AD  | Allelic depths (REF, then ALT(s)) |
+| PL  | Phred-scaled genotype likelihoods (order as in spec, e.g. REF/REF, REF/ALT, ALT/ALT for biallelic) |
+| GL  | Genotype likelihoods (non-Phred) |
+| GP  | Genotype posterior probabilities |
+
+Sample columns: colon-separated values in the same order as FORMAT.
+
+---
+
+## 6. Genotype (GT) encoding
+
+- **0** = reference allele, **1** = first ALT, **2** = second ALT, etc.
+- **`/`** = unphased (e.g. `0/1`), **`|`** = phased (e.g. `0|1`).
+- **`.`** = missing (e.g. `./.`).
+
+---
+
+## 7. Special cases
+
+- **Sites-only VCF:** Only 8 columns (no FORMAT, no sample columns); describes variants without per-sample genotypes.
+- **gVCF:** Includes reference blocks and quality for non-variant segments; used for joint calling.
+- **BCF:** Binary, BGZF-compressed VCF; indexable (e.g. Tabix) for fast queries.
+
+---
+
+## 8. Parsing and tools
+
+- Do not rely on column order beyond the first 9; sample order is not guaranteed.
+- Use established parsers (e.g. pysam, cyvcf2, bcftools) rather than ad-hoc parsing.
+- Do not edit VCF in word processors (use plain text/editor only).
+
+---
+
+## 9. Minimal example
+
+```text
+##fileformat=VCFv4.2
+##INFO=<ID=DP,Number=1,Type=Integer,Description="Total depth">
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+##FORMAT=<ID=DP,Number=1,Type=Integer,Description="Read depth">
+#CHROM  POS   ID   REF  ALT  QUAL  FILTER  INFO   FORMAT   SAMP1   SAMP2
+20      14370 rs1  G    A    29    PASS    DP=14  GT:DP    0/0:1   1/0:8
+```
+
+When writing or interpreting VCF in this project, follow this specification and the official HTS specs.

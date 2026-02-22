@@ -1,0 +1,192 @@
+---
+description: Vembrane — VCF/BCF filter, tag, table, annotate, sort, structured, FHIR (from official docs)
+globs: "**/*.vcf,**/*.bcf,**/vembrane*.py,**/*vembrane*"
+alwaysApply: false
+---
+
+# Vembrane — Complete usage reference
+
+**Source:** [vembrane/docs](https://github.com/vembrane/vembrane/tree/main/docs) and [vembrane README](https://github.com/vembrane/vembrane). High-level overview: **https://vembrane.github.io**.
+
+vembrane transforms VCF/BCF using Python expressions over `INFO`, `FORMAT`, `CHROM`, `POS`, `ID`, `REF`, `ALT`, `QUAL`, `FILTER`, and annotation field `ANN`/`CSQ`. Backends: pysam or cyvcf2.
+
+---
+
+## Common options (shared across subcommands)
+
+| Option | Short | Meaning |
+|--------|-------|--------|
+| `--output`, `-o` | | Output path (default: stdout) |
+| `--output-fmt`, `-O` | | `vcf` \| `bcf` \| `uncompressed-bcf` (where applicable) |
+| `--annotation-key`, `-k` | | INFO key for annotations (default `ANN`; use `CSQ` for VEP) |
+| `--aux NAME=PATH`, `-a` | | Auxiliary file: one item per line, loaded as set; use as `AUX["NAME"]` in expressions |
+| `--context CONTEXT` | | Python statement added to expression context (not sandboxed) |
+| `--context-file PATH` | | Python script: globals/functions available in expressions (not sandboxed) |
+| `--ontology PATH` | | OBO ontology; use `SO` in expressions; default built-in from sequenceontology.org if `SO` used |
+| `--overwrite-number-info FIELD=NUMBER` | | Override INFO number (e.g. `cosmic_CNT=.`) |
+| `--overwrite-number-format FIELD=NUMBER` | | Override FORMAT number (e.g. `DP=2`) |
+| `--backend {cyvcf2,pysam}`, `-b` | | Reading backend (default: cyvcf2) |
+
+---
+
+## 1. `vembrane filter`
+
+**Usage:** `vembrane filter [options] expression [input vcf/bcf]` — input can be omitted to read from stdin.
+
+**Options (filter-specific):** `--keep-unmatched` (keep all annotations if at least one passes; SnpSift-like), `--preserve-order` (for BNDs).
+
+**Expression:** Any Python expression that evaluates to `bool`. Use `bool()`, `any()`, `all()` for truthy/aggregation.
+
+**Allowed in expressions:** `all`, `any`; `abs`, `len`, `max`, `min`, `round`, `sum`; `enumerate`, `filter`, `iter`, `map`, `next`, `range`, `reversed`, `sorted`, `zip`; `dict`, `list`, `set`, `tuple`; `bool`, `chr`, `float`, `int`, `ord`, `str`; `math.*`; `statistics.*`; `re.*`; custom: `without_na(iterable)`, `replace_na(iterable, replacement)`; genotype: `count_hom`, `count_het`, `count_any_ref`, `count_any_var`, `count_hom_ref`, `count_hom_var`, `is_hom(sample)`, `is_het(sample)`, `is_hom_ref(sample)`, `is_hom_var(sample)`, `has_ref(sample)`, `has_var(sample)`.
+
+**Available fields in expressions:**
+
+| Name | Type | Example |
+|------|------|---------|
+| `INFO` | `Dict[str, Any]` | `INFO["DP"] > 0` |
+| `ANN` | Dict (annotation key from `-k`) | `ANN["SYMBOL"] == "CDH2"` |
+| `CHROM` | `str` | `CHROM == "chr2"` |
+| `POS` | `int` | `24 < POS < 42` |
+| `END` | `int` | also `INFO["END"]` |
+| `ID`, `REF`, `ALT` | `str` | |
+| `QUAL` | `float` | `QUAL >= 30` |
+| `FILTER` | `List[str]` | `"PASS" in FILTER` |
+| `FORMAT` | `Dict[str, Dict[str, Any]]` | `FORMAT["DP"][SAMPLES[0]] > 0` |
+| `SAMPLES` | `List[str]` | `"Tumor" in SAMPLES` |
+| `INDEX` | `int` | |
+
+**Missing values:** Annotation/INFO/FORMAT missing → `NA`. Compare with `NA` is always False; use `INFO["DP"] is NA`, `ID is not None`. Attribute access on `NA` returns `NA`. `re.search(..., NA)` treats NA as empty string.
+
+**Multi-allelic:** vembrane does not split multi-allelics; preprocess with e.g. `bcftools norm -m-any`, GATK LeftAlignAndTrimVariants (split-multi-allelics), or vcfmulti2oneallele.
+
+**Examples:**
+```sh
+vembrane filter 'ANN["SYMBOL"] == "CDH2" and ANN["Annotation_Impact"] == "HIGH"' variants.bcf
+vembrane filter 'QUAL >= 30' variants.vcf
+vembrane filter 'ANN["Protein_position"].start < 10' variants.bcf
+vembrane filter 'bool(re.search("^rs[0-9]+", ID or ""))' variants.vcf
+vembrane filter 'not {"pathogenic","likely_pathogenic"}.isdisjoint(ANN["CLIN_SIG"])' variants.vcf
+vembrane filter 'FORMAT["DP"][SAMPLES[0]] > 0' variants.vcf
+vembrane filter 'is_het("kid") and is_hom_ref("mom") and is_hom_ref("dad")' variants.vcf
+vembrane filter --aux genes=genes.txt "ANN['SYMBOL'] in AUX['genes']" variants.vcf
+vembrane filter --ontology so.obo 'ANN["Consequence"].any_is_a("intron_variant")' variants.vcf
+```
+
+**Ontology (SO):** `SO.get_id(term)`, `SO.get_term(id_)`; `terms.most_specific_terms()`; `term.ancestors()`, `term.descendants()`, `term.parents()`, `term.children()`; `term.is_a(parent)`, `terms.any_is_a(parent)`; `term.is_ancestor(other)`, `term.is_descendant(other)`; `term.path_length(target)`.
+
+---
+
+## 2. `vembrane tag`
+
+Non-destructive filter: adds FILTER tags to records that match. Use `--tag-mode fail` to tag records that *fail* the expression. Tag names: no whitespace/semicolons, not `"0"`.
+
+```sh
+vembrane tag --tag quality_at_least_30="QUAL >= 30" variants.vcf
+vembrane tag -t quality_at_least_30="QUAL >= 30" -t illumina="'Illumina' in INFO['platformnames']" variants.vcf
+vembrane tag --tag-mode fail --tag q_below_30="QUAL >= 30" variants.vcf
+```
+
+---
+
+## 3. `vembrane table`
+
+**Usage:** `vembrane table [options] expression [vcf]` — expression is a comma-separated tuple defining columns. Use `ALL` to dump all INFO/FORMAT/ANN columns.
+
+**Options:** `--separator CHAR` (default `\t`), `--header auto|none|comma_separated`, `--naming-convention dictionary|underscore|slash` (for `ALL`), `--wide` (one column per sample), `--long` (default; SAMPLE column + per-sample rows).
+
+**Long format:** First column `SAMPLE`; variable `SAMPLE` available in expressions.  
+**Wide format:** Use `for_each_sample(lambda sample: expr)` in the expression (and optionally in `--header`); one argument lambda, same number of fields.
+
+```sh
+vembrane table 'CHROM, POS, 10**(-QUAL/10), ANN["CLIN_SIG"]' input.vcf > table.tsv
+vembrane table 'CHROM, POS, FORMAT["AD"][SAMPLE]/FORMAT["DP"][SAMPLE]*QUAL' input.vcf > long_table.tsv
+vembrane table --wide 'CHROM, POS, for_each_sample(lambda s: FORMAT["DP"][s])' input.vcf > table.tsv
+vembrane table 'ALL' input.vcf > table.tsv
+```
+
+---
+
+## 4. `vembrane annotate`
+
+Adds INFO annotations from a table-like file (e.g. TSV) by overlapping regions. **Usage:** `vembrane annotate [options] config [vcf]`.
+
+**Config (YAML):** `annotation.file`, `annotation.columns` (chrom, start, stop column names), `annotation.delimiter`, `annotation.values`: list of `value.vcf_name`, `number`, `description`, `type`, `expression`. Expression can use `DATA['column_name']` (overlapping rows). Example:
+
+```yaml
+annotation:
+  file: "example.tsv"
+  columns:
+    chrom: "chrom"
+    start: "chromStart"
+    stop: "chromEnd"
+  delimiter: "\t"
+  values:
+  - value:
+      vcf_name: "genehancer_score"
+      number: "1"
+      description: "Score from genehancer."
+      type: "Float"
+      expression: "DATA['score'][0]"
+```
+
+```sh
+vembrane annotate example.yaml example.bcf > annotated.vcf
+```
+
+---
+
+## 5. `vembrane sort`
+
+Sort by Python expression(s) (ascending). Use `desc(expr)` for descending. Tuple of expressions = multi-key (left to right priority). **Use case:** prioritization for inspection; for position-sort use bcftools. **Options:** `--preserve-annotation-order`, `--max-in-mem-records` (default 100000).
+
+```sh
+vembrane sort 'int(log10(ANN["gnomad_AF"])), desc(ANN["REVEL"])' input.vcf > prioritized.vcf
+vembrane sort '{"HIGH":0,"MODERATE":1,"LOW":2,"MODIFIER":3}[ANN["IMPACT"]]' input.vcf > prioritized.vcf
+```
+
+---
+
+## 6. `vembrane structured`
+
+Convert VCF to JSON/JSONL/YAML via a [YTE template](https://yte-template-engine.github.io). **Usage:** `vembrane structured [options] template [vcf]`. **Options:** `--output-fmt {json,jsonl,yaml}` (or infer from `-o` extension).
+
+In the template, prefix expressions with `?`; same variable names as filter (CHROM, POS, REF, ALT, INFO, ANN, FORMAT, SAMPLES, etc.). Use `?if`, `?for`, `__variables__`, etc. per YTE.
+
+```yaml
+variant:
+  chrom: ?CHROM
+  pos: ?POS
+  ref: ?REF
+  alt: ?ALT
+  ?if ANN:
+    gene: ?ANN["SYMBOL"]
+    impact: ?ANN["IMPACT"]
+```
+
+```sh
+vembrane structured template.yml input.vcf --output output.json
+```
+
+---
+
+## 7. `vembrane fhir`
+
+Convert VCF to HL7 FHIR observations. **Usage:** `vembrane fhir [options] [vcf] sample {GRCh37|GRCh38}`. Expects VEP-annotated VCF (`--vcf_info_field ANN --numbers --symbol --hgvs --hgvsg`).
+
+**Options:** `--url`, `--status`, `--profile` (e.g. `mii_molgen_v2025.0.0`), `--id-source`, `--genomic-source-class`, `--sample-allelic-frequency` (Python expr), `--sample-allelic-read-depth` (default `FORMAT['AD'][sample][1]`), `--confidence-status` (expr), `--detection-limit`, `--output-fmt`, `-o`.
+
+```sh
+vembrane fhir tumor GRCh38 --profile mii_molgen_v2025.0.0 --output-fmt json --annotation-key ANN < sample.vcf > sample-tumor.fhir.json
+```
+
+---
+
+## 8. Custom ANN types (summary)
+
+vembrane parses ANN/CSQ per [docs/ann_types.md](https://github.com/vembrane/vembrane/blob/main/docs/ann_types.md). Unrecognized fields remain `str`.
+
+**VEP (examples):** `Consequence` → `Consequences`/list of Terms (`ANN["Consequence"].any_is_a("intron_variant")`); `cDNA_position`, `CDS_position`, `Protein_position` → `PosRange` with `.start`, `.end`, `.length`; `SIFT`, `PolyPhen` → `Dict[str, float]`; `INTRON`, `EXON` → `RangeTotal` (`.range`, `.total`); `CLIN_SIG` → `list[str]`; `REVEL`, `gnomad_AF`, etc. → float; many others. **snpEff:** `Annotation` → Consequences; `cDNA.pos / cDNA.length` etc. → PosRange; `Annotation_Impact`, `Gene_Name`, `Feature_ID` etc. → str.
+
+---
+
+When writing vembrane expressions or configs in this project, follow this reference and the official [vembrane docs](https://github.com/vembrane/vembrane/tree/main/docs).

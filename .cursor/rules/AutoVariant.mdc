@@ -1,0 +1,126 @@
+---
+description: AutoVariant project knowledge — variant interpretation, FUNC/INFO, quality, zygosity
+globs:
+alwaysApply: true
+---
+
+# AutoVariant — Project knowledge (quick reference)
+
+Stored knowledge for consistent interpretation and reasoning about variants in this project. Add/expand as new info is provided.
+
+---
+
+## 1. Interpreting FUNC and INFO fields
+
+**Location (e.g. intronic)**  
+- Notation like `c.81+37_81+41delGGAGT`: mutation is **not** in the coding part of the gene; it is in an **intron** (non-coding).  
+- The numbers (e.g. 37 to 41) are **base pairs away from the end of an exon** (distance into the intron).  
+- Deep intron (not at splice site) → often treated as **Variant of Unknown Significance (VUS)** unless evidence shows impact on splicing.
+
+**Type (e.g. del = Deletion)**  
+- Reference had more bases than the sample (e.g. ref `GGGAGT` → sample `G`).  
+- “5 nucleotides (GGAGT) were lost” = **deletion of 5 bp**.
+
+**Zygosity (GT)**  
+- **0/1 = Heterozygous**: one normal copy, one mutated copy.  
+- 0 = reference allele, 1 = first alternate allele.
+
+**Function**  
+- If location is deep intron and not at splice site → **function often “unknown”** / VUS unless studies show effect on splicing or other function.
+
+---
+
+## 2. Quality metrics (“Is this real?”)
+
+- **FILTER: PASS** — variant passed all quality thresholds.  
+- **DP (Depth)** — number of reads covering the site; e.g. **84** = solid coverage.  
+- **AF (Allele Frequency)** — fraction of reads showing the alternate allele; e.g. **0.59 (~60%)** is consistent with **heterozygous (0/1)** call.
+- **DP (Depth)** — use the **sample-specific DP** at the end of the row (not just INFO DP) for the specific patient; e.g. **84** or **84x** = solid coverage.
+
+---
+
+## 3. Step-by-step variant interpretation workflow
+
+**Step 1: Gene and locus**  
+- **Gene:** From the **gene tag inside the FUNC brackets** (e.g. `FAH`).  
+- **Locus:** From the **first two columns** of the row: CHROM and POS (e.g. `chr15:80445513`).
+
+**Step 2: Zygosity**  
+- **GT (genotype)** at the **very end** of the row:  
+  - **0/1** = Heterozygous (one mutated, one normal).  
+  - **1/1** = Homozygous (two mutated).  
+  - **0/1 on X in a male** = Hemizygous (e.g. chr15 in your data → not X, so 0/1 = Heterozygous).
+
+**Step 3: Variant effect and coding region**  
+- Inside **FUNC**: look for **type**, **coding**, **location**.  
+  - **Variant type:** e.g. `type:del` = deletion.  
+  - **Coding / HGVSc:** **coding** tag starting with `c.` (e.g. `c.81+37_81+41delGGAGT`).  
+  - **Location:** e.g. `location: intronic` → **intronic deletion variant**.
+
+**Step 4: Coverage (depth)**  
+- **DP:** Prefer the **sample-specific DP** at the end of the row (most accurate for that patient).  
+- Report as e.g. **84** or **84x** (solid coverage).
+
+---
+
+## 4. Variant report structure (four pillars)
+
+**1. Genomic identity (the “Where”)**  
+- **Gene symbol** — e.g. FAH (Fumarylacetoacetate Hydrolase).  
+- **Locus** — physical address: CHROM:POS (e.g. chr15:80472479).  
+- **Reference allele** — “normal” base at this position (e.g. C).  
+- **Variant allele** — base in the sample (e.g. T).
+
+**2. Genetic details (the “What”)**  
+- **Zygosity:** 1/1 = **homozygous** (both copies carry the mutation).  
+- **Coding change (HGVSc):** e.g. c.974C>T — at position 974, C replaced by T.  
+- **Protein change (HGVSp):** e.g. p.Thr325Met — amino acid 325, Threonine → Methionine.  
+- **Location:** exonic (e.g. Exon 12) = **directly changes protein**; intronic = non-coding / splice context.
+
+**3. Sequencing quality (the “How reliable”)**  
+- **FILTER: PASS** — passed quality controls.  
+- **DP:** e.g. 164 = high confidence (many reads).  
+- **AF:** e.g. **0.988 (~100%)** supports **homozygous (1/1)** call.  
+- **Computational scores:**  
+  - **PolyPhen:** 1.0 = “Probably damaging”.  
+  - **SIFT:** 0.0 = “Deleterious/harmful”.  
+  (High PolyPhen + low SIFT → strong predicted negative impact.)
+
+**4. Database links (clinical context)**  
+- **ClinVar ID / rsID** — e.g. 552826 (rs770713168).  
+- **Classification** — may be “Conflicting interpretations” (some labs Pathogenic, others VUS); computational scores can support pathogenic interpretation.  
+- **Associated disease** — e.g. FAH → **Tyrosinemia Type I** (defect in tyrosine breakdown → toxic buildup in liver/kidneys).
+
+---
+
+## 5. VCF/FORMAT tags — genotype, depth, strand, Ion Torrent
+
+**1. Genotype & frequency (the basics)**  
+- **GT** — Genotype: 0/1 = heterozygous, 1/1 = homozygous (“dose” of variant).  
+- **AF** — Allele frequency: fraction/percentage of reads carrying the mutation.  
+- **GQ** — Genotype quality (Phred-scaled); **99** = highest confidence.
+
+**2. Depth & observations (the evidence)**  
+- **DP / FDP** — Total times this position was sequenced.  
+- **RO / FRO** — Count of **reference** (normal) base.  
+- **AO / FAO** — Count of **alternate** (mutant) base.  
+- **“F” prefix (FAO, FDP, FRO):** **Flow Evaluator** — more accurate for **Ion Torrent** data; corrects for flow-signal errors.
+
+**3. Strand bias (error check)**  
+- Sequencing is on both strands; variant only on one strand → often artifact.  
+- **SAF / SAR** — Alternate observations on **forward** vs **reverse** strand.  
+- **SRF / SRR** — Reference observations on **forward** vs **reverse** strand.  
+- **STB / STBP** — Strand-bias statistics; **high values** → possible strand-bias artifact (treat with caution).
+
+**4. Ion Torrent–specific quality**  
+- **HRUN** — Homopolymer run length (e.g. AAAAA). Ion Torrent often misbehaves in homopolymers.  
+- **QD** — Quality by depth (quality normalized by coverage).  
+- **MLLD** — Mean log-likelihood delta; how much better the variant fits than noise.  
+- **FDVR** — How much the alternate allele disrupts expected “flow” on the chip.
+
+**5. Functional & original annotations**  
+- **FUNC** — Main tag for gene, coding (c.), protein (p.), function (missense/nonsense), exon. Use for Step 1 & 2 interpretation.  
+- **TYPE** — Mutation category: SNP, Deletion, Insertion, or Complex.  
+- **OREF / OALT** — Original ref/alt before software normalization; useful to double-check complex indels.
+
+Use this knowledge when explaining variants, writing filters, or designing AutoVariant logic.
