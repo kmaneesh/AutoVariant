@@ -179,7 +179,7 @@ def api_vcf_list() -> VcfListResponse:
 @router.post("/api/search", response_model=SearchResponse)
 def api_search(body: SearchRequest) -> SearchResponse:
     """Run variant search on the selected VCF; return 7-step message."""
-    from scripts.auto_variant import run_variant_search
+    from app.auto_variant import run_variant_search
 
     resolved = get_vcf_path_for_request(body.vcf_path)
     if not resolved:

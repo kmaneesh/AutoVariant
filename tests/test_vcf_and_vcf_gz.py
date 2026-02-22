@@ -33,7 +33,7 @@ def vcf_and_gz(tmp_path):
 
 def test_read_vcf_with_cyvcf2(vcf_and_gz):
     """_read_vcf_cyvcf2 reads plain .vcf and returns records."""
-    from scripts.auto_variant import _read_vcf_cyvcf2
+    from app.auto_variant import _read_vcf_cyvcf2
 
     vcf_path, _ = vcf_and_gz
     sample_names, records = _read_vcf_cyvcf2(vcf_path)
@@ -45,7 +45,7 @@ def test_read_vcf_with_cyvcf2(vcf_and_gz):
 
 def test_read_vcf_gz_with_cyvcf2(vcf_and_gz):
     """_read_vcf_cyvcf2 reads .vcf.gz and returns the same records as .vcf (cyvcf2 supports both)."""
-    from scripts.auto_variant import _read_vcf_cyvcf2
+    from app.auto_variant import _read_vcf_cyvcf2
 
     vcf_path, gz_path = vcf_and_gz
     _, records_vcf = _read_vcf_cyvcf2(vcf_path)
@@ -57,7 +57,7 @@ def test_read_vcf_gz_with_cyvcf2(vcf_and_gz):
 
 def test_run_variant_search_works_with_vcf_and_vcf_gz(vcf_and_gz):
     """run_variant_search works for both .vcf and .vcf.gz (same query, same report)."""
-    from scripts.auto_variant import run_variant_search
+    from app.auto_variant import run_variant_search
 
     vcf_path, gz_path = vcf_and_gz
     report_vcf = run_variant_search(vcf_path, "FAH")

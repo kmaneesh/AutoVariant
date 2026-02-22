@@ -7,6 +7,7 @@ Step 4: optional gnomAD/ExAC via MyVariant.info (httpx). Self-contained; no look
 """
 import argparse
 import ast
+import gzip
 import re
 import sys
 import urllib.parse
@@ -434,10 +435,15 @@ def _read_vcf_cyvcf2(vcf_path: Path) -> tuple[list[str], list[dict]]:
 
 
 def _read_vcf_records(vcf_path: Path) -> tuple[list[str], list[dict]]:
-    """Read VCF file with built-in text parser (tolerates Ion Reporter FUNC / semicolons in INFO)."""
+    """Read VCF file with built-in text parser (tolerates Ion Reporter FUNC / semicolons in INFO). Supports .vcf and .vcf.gz."""
     sample_names = []
     records = []
-    with open(vcf_path, encoding="utf-8", errors="replace") as f:
+    path_str = str(vcf_path)
+    if path_str.endswith(".gz"):
+        f = gzip.open(vcf_path, "rt", encoding="utf-8", errors="replace")
+    else:
+        f = open(vcf_path, encoding="utf-8", errors="replace")
+    try:
         for line in f:
             line = line.rstrip("\n\r")
             if not line:
@@ -472,6 +478,8 @@ def _read_vcf_records(vcf_path: Path) -> tuple[list[str], list[dict]]:
                 "samples": samples,
                 "format": format_keys,
             })
+    finally:
+        f.close()
     return sample_names, records
 
 

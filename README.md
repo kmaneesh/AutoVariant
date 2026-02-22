@@ -6,8 +6,8 @@ Search a VCF by gene symbol or location and get the 7-step variant message (WES 
 
 ```bash
 source .venv/bin/activate
-python scripts/auto_variant.py FAH --vcf path/to/file.vcf
-python scripts/auto_variant.py 80472479 --vcf path/to/file.vcf.gz
+python -m app.auto_variant FAH --vcf path/to/file.vcf
+python -m app.auto_variant 80472479 --vcf path/to/file.vcf.gz
 ```
 
 ## Web app

@@ -6,12 +6,11 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
-SCRIPT = ROOT / "scripts" / "auto_variant.py"
-VCF = ROOT / "WES166_26032846_BSC.vcf"
+VCF = ROOT / "data" / "WES166_26032846_BSC_IN.vcf"
 
 
 def _run_report(search: str, vcf: Path = VCF) -> tuple[str, str, int]:
-    cmd = [sys.executable, str(SCRIPT), search, "--vcf", str(vcf)]
+    cmd = [sys.executable, "-m", "app.auto_variant", search, "--vcf", str(vcf)]
     r = subprocess.run(cmd, capture_output=True, text=True, cwd=str(ROOT))
     return r.stdout, r.stderr, r.returncode
 
