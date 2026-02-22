@@ -6,3 +6,5 @@ fastmcp>=2.0,<3
 pytest>=8.0
 vcfpy>=0.14.0
 vembrane>=2.00
+cyvcf2>=0.30.0
+biothings_client>=0.2.0
