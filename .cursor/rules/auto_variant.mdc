@@ -123,4 +123,43 @@ Stored knowledge for consistent interpretation and reasoning about variants in t
 - **TYPE** — Mutation category: SNP, Deletion, Insertion, or Complex.  
 - **OREF / OALT** — Original ref/alt before software normalization; useful to double-check complex indels.
 
+---
+
+## 6. Amino acid residue properties (for protein change wording)
+
+Use when describing amino acid changes (e.g. “replaces X, which is neutral and non-polar, with Y, which is acidic and polar”). All 20 standard amino acids in proteins; properties refer to the **side chain (R group)** at physiological pH. *Sources: biochemistry texts, [NYU Proteomics](https://education.med.nyu.edu/mbm/proteomics/properties.shtml), [Chem LibreTexts](https://chem.libretexts.org/Bookshelves/Introductory_Chemistry/The_Basics_of_General_Organic_and_Biological_Chemistry_(Ball_et_al.)/18:_Amino_Acids_Proteins_and_Enzymes/18.01:_Properties_of_Amino_Acids).*
+
+**Charge / polarity (side chain):**
+- **Acidic (negatively charged):** Asp (D), Glu (E) — side chain has carboxylate (COO⁻).
+- **Basic (positively charged):** Lys (K), Arg (R), His (H) — side chain carries positive charge at pH 7.
+- **Polar uncharged (hydrophilic):** Ser (S), Thr (T), Asn (N), Gln (Q), Tyr (Y), Cys (C) — can H-bond; not charged.
+- **Nonpolar / hydrophobic:** Ala (A), Val (V), Leu (L), Ile (I), Phe (F), Trp (W), Met (M), Pro (P), Gly (G) — do not have charged or strongly polar side chains.
+
+**Quick lookup (3-letter → property for wording):**
+
+| 3-letter | 1-letter | Property (for “which is …”) |
+|----------|----------|-----------------------------|
+| Ala | A | nonpolar, hydrophobic |
+| Arg | R | basic, positively charged |
+| Asn | N | polar uncharged (amide) |
+| Asp | D | acidic, negatively charged |
+| Cys | C | polar uncharged (thiol, can form disulfide) |
+| Gln | Q | polar uncharged (amide) |
+| Glu | E | acidic, negatively charged |
+| Gly | G | small, neutral (no side chain) |
+| His | H | basic, positively charged (imidazole) |
+| Ile | I | nonpolar, hydrophobic |
+| Leu | L | nonpolar, hydrophobic |
+| Lys | K | basic, positively charged |
+| Met | M | nonpolar, hydrophobic (sulfur) |
+| Phe | F | nonpolar, hydrophobic (aromatic) |
+| Pro | P | nonpolar, cyclic (rigid) |
+| Ser | S | polar uncharged (hydroxyl) |
+| Thr | T | polar uncharged (hydroxyl) |
+| Trp | W | nonpolar, hydrophobic (aromatic) |
+| Tyr | Y | polar uncharged (aromatic hydroxyl) |
+| Val | V | nonpolar, hydrophobic |
+
+**Example wording:** “This variant (p.Gly1098Asp) replaces **glycine**, which is **neutral and non-polar**, with **aspartic acid**, which is **acidic and polar**, at the 1098th amino acid position.”
+
 Use this knowledge when explaining variants, writing filters, or designing AutoVariant logic.

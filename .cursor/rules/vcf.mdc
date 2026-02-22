@@ -72,6 +72,35 @@ Custom INFO must be defined in the header.
 
 ---
 
+## 4.1. Phenotype-prioritization INFO block (pipe-separated)
+
+Some WES/clinical VCFs include an INFO field that holds **phenotype-driven variant prioritization**: one block per compatible mode of inheritance (MOI), with pipe-separated values. The block format (as defined in such VCF headers) is:
+
+`{RANK|ID|GENE_SYMBOL|ENTREZ_GENE_ID|MOI|P-VALUE|GENE_COMBINED_SCORE|GENE_PHENO_SCORE|GENE_VARIANT_SCORE|VARIANT_SCORE|CONTRIBUTING_VARIANT|WHITELIST_VARIANT|FUNCTIONAL_CLASS|HGVS|ACMG_CLASSIFICATION|ACMG_EVIDENCE|ACMG_DISEASE_ID|ACMG_DISEASE_NAME}`
+
+- **RANK** — Prioritization rank for this variant under the given MOI (1 = top candidate).
+- **ID** — Variant identifier (e.g. chrom-pos-ref-alt_MOI).
+- **GENE_SYMBOL** — Gene symbol (e.g. FAH).
+- **ENTREZ_GENE_ID** — NCBI Entrez Gene ID.
+- **MOI** — Mode of inheritance (e.g. AR, AD).
+- **P-VALUE** — Gene–phenotype association p-value.
+- **GENE_COMBINED_SCORE** — Gene combined score (0–1).
+- **GENE_PHENO_SCORE** — Gene–phenotype match score (0–1).
+- **GENE_VARIANT_SCORE** — Variant support for the gene (0–1).
+- **VARIANT_SCORE** — Support for this specific variant (0–1).
+- **CONTRIBUTING_VARIANT** — 1 if variant contributes to prioritization, 0 otherwise.
+- **WHITELIST_VARIANT** — 1 if from user whitelist, 0 otherwise.
+- **FUNCTIONAL_CLASS** — e.g. missense_variant, frameshift_truncation (Sequence Ontology style).
+- **HGVS** — Full HGVS string (e.g. GENE:TRANSCRIPT:c.974C>T:p.(Thr325Met)).
+- **ACMG_CLASSIFICATION** — ACMG/AMP classification (e.g. LIKELY_PATHOGENIC, UNCERTAIN_SIGNIFICANCE).
+- **ACMG_EVIDENCE** — ACMG evidence codes (e.g. PM2_Supporting, PP3_Strong, PP4_Moderate, BP1).
+- **ACMG_DISEASE_ID** — Disease identifier (e.g. OMIM:276700).
+- **ACMG_DISEASE_NAME** — Disease name (underscores in VCF = spaces).
+
+Parse by splitting on `|`; index by the order above. Multiple blocks (e.g. one per MOI) may be separated by `},{` within the same INFO value. Use these fields for report text (gene, disease, ACMG classification, HGVS) without naming the originating tool.
+
+---
+
 ## 5. Common FORMAT fields (per-sample)
 
 | ID | Meaning |
