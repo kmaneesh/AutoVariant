@@ -3,19 +3,20 @@
 AutoVariant: search a VCF by gene symbol or location and output
 a final variant message following the WES Variant Details SOP (7 steps).
 Step 2 uses amino acid residue properties (AutoVariant.mdc) for wording.
-Uses vcfpy for VCF reading; falls back to built-in text parsing for files with
-non-standard INFO (e.g. Ion Reporter FUNC containing semicolons) or encoding issues.
+Step 4: optional gnomAD/ExAC via MyVariant.info (httpx). Self-contained; no lookup package.
 """
 import argparse
 import ast
 import re
 import sys
+import urllib.parse
 from pathlib import Path
 
-# So we can import lookup modules when run as python scripts/auto_variant.py from repo root
-_scripts_dir = Path(__file__).resolve().parent
-if str(_scripts_dir) not in sys.path:
-    sys.path.insert(0, str(_scripts_dir))
+try:
+    from cyvcf2 import VCF
+    CYVCF2_AVAILABLE = True
+except ImportError:
+    CYVCF2_AVAILABLE = False
 
 try:
     from vcfpy import Reader
@@ -24,11 +25,74 @@ except ImportError:
     VCFPY_AVAILABLE = False
 
 try:
-    from myvariant import lookup_gnomad_exac
-    LOOKUP_AVAILABLE = True
+    import httpx
+    HTTPX_AVAILABLE = True
 except ImportError:
-    LOOKUP_AVAILABLE = False
-    lookup_gnomad_exac = None
+    HTTPX_AVAILABLE = False
+
+
+def _step4_population_message(chrom: str, pos: int, ref: str, alt: str) -> str | None:
+    """Fetch MyVariant.info for variant; return Step 4 sentence (gnomAD/ExAC) or None."""
+    if not HTTPX_AVAILABLE:
+        return None
+    c = str(chrom).strip()
+    if not c.lower().startswith("chr"):
+        c = "chr" + c
+    vid = f"{c}:g.{pos}{ref}>{alt}"
+    url = "https://myvariant.info/v1/variant/" + urllib.parse.quote(vid, safe="")
+    try:
+        with httpx.Client(timeout=20.0) as client:
+            r = client.get(url)
+            r.raise_for_status()
+            data = r.json()
+    except Exception:
+        return None
+
+    def _af(obj):
+        if obj is None:
+            return None
+        if isinstance(obj, (int, float)):
+            return float(obj)
+        if isinstance(obj, dict) and "af" in obj:
+            return _af(obj["af"])
+        return None
+
+    gnomad_af_max = None
+    for key in ("gnomad_exome", "gnomad_genome"):
+        g = data.get(key)
+        if not isinstance(g, dict):
+            continue
+        af = _af(g.get("af")) or g.get("allele_freq")
+        if af is not None:
+            try:
+                af = float(af)
+                if gnomad_af_max is None or af > gnomad_af_max:
+                    gnomad_af_max = af
+            except (TypeError, ValueError):
+                pass
+    exac_af = None
+    exac = data.get("exac")
+    if isinstance(exac, dict):
+        exac_af = _af(exac.get("af"))
+
+    def _pct(af_val):
+        if af_val is None:
+            return None
+        pct = af_val * 100
+        return f"{pct:.2f}%" if pct >= 0.01 else f"{pct:.4f}%"
+
+    if gnomad_af_max is not None and exac_af is not None:
+        return (
+            f"This variant has minor allele frequency of {_pct(gnomad_af_max)} "
+            f"and {_pct(exac_af)} in gnomAD (max) and ExAC database respectively."
+        )
+    if gnomad_af_max is not None:
+        return (
+            f"This variant has minor allele frequency of {_pct(gnomad_af_max)} in gnomAD (max)."
+        )
+    if exac_af is not None:
+        return f"This variant has minor allele frequency of {_pct(exac_af)} in ExAC database."
+    return None
 
 
 # Exomiser pipe-separated field indices (from VCF header)
@@ -40,6 +104,79 @@ EXOMISER_KEYS = [
     "EXOMISER_ACMG_CLASSIFICATION", "EXOMISER_ACMG_EVIDENCE",
     "EXOMISER_ACMG_DISEASE_ID", "EXOMISER_ACMG_DISEASE_NAME",
 ]
+EXOMISER_HEADER = tuple(EXOMISER_KEYS)
+
+# FUNC: canonical key order for tuple rows (dict(zip(FUNC_HEADER, row)))
+FUNC_HEADER = (
+    "origPos", "origRef", "normalizedRef", "gene", "normalizedPos", "normalizedAlt",
+    "gt", "coding", "transcript", "function", "protein", "location", "origAlt",
+    "exon", "codon", "polyphen", "sift", "grantham",
+    "CLNREVSTAT1", "CLNACC1", "CLNSIG1", "CLNID1",
+)
+
+
+def _format_value_for_display(record, key: str, idx: int):
+    """One sample's value for a FORMAT key using cyvcf2."""
+    val = record.format(key)
+    if val is None or (hasattr(val, "__len__") and len(val) == 0):
+        return None
+    v0 = val[idx]
+    if key == "GT" and getattr(record, "genotypes", None) is not None:
+        g = record.genotypes[idx]
+        return "/".join(str(x) for x in g[:2]) if len(g) >= 2 else str(v0)
+    if hasattr(v0, "item"):
+        try:
+            return v0.item()
+        except ValueError:
+            return list(v0) if hasattr(v0, "__len__") else v0
+    if hasattr(v0, "__len__") and not isinstance(v0, (str, bytes)):
+        return [x.item() if hasattr(x, "item") else x for x in v0]
+    return str(v0) if isinstance(v0, (bytes,)) else v0
+
+
+def extract_exomiser(record):
+    """
+    Extract Exomiser from INFO as (header_tuple, list of value tuples).
+    record: cyvcf2 Variant. To dict: dict(zip(EXOMISER_HEADER, row)).
+    """
+    raw = record.INFO.get("Exomiser")
+    if raw is None or (isinstance(raw, str) and not raw.strip()):
+        return (EXOMISER_HEADER, [])
+    raw = str(raw).strip()
+    if not raw:
+        return (EXOMISER_HEADER, [])
+    rows = []
+    for block in re.split(r"\}\s*;\s*\{", raw):
+        block = block.strip(" {}")
+        if not block:
+            continue
+        vals = block.split("|")
+        n = len(EXOMISER_HEADER)
+        vals = list(vals) + [None] * (n - len(vals)) if len(vals) < n else vals[:n]
+        rows.append(tuple(vals))
+    return (EXOMISER_HEADER, rows)
+
+
+def extract_func(record):
+    """
+    Extract FUNC from INFO as (header_tuple, list of value tuples).
+    record: cyvcf2 Variant. To dict: dict(zip(FUNC_HEADER, row)).
+    """
+    raw = record.INFO.get("FUNC")
+    if raw is None:
+        return (FUNC_HEADER, [])
+    if isinstance(raw, (list, dict)):
+        items = raw if isinstance(raw, list) else [raw]
+    else:
+        try:
+            items = ast.literal_eval(raw)
+        except (ValueError, SyntaxError):
+            return (FUNC_HEADER, [])
+        if not isinstance(items, list):
+            items = [items] if items is not None else []
+    rows = [tuple(d.get(k) for k in FUNC_HEADER) for d in items if isinstance(d, dict)]
+    return (FUNC_HEADER, rows)
+
 
 # Amino acid residue properties for Step 2 wording (from AutoVariant.mdc / biochemistry refs)
 # 3-letter code -> (full name, property phrase for "which is ...")
@@ -261,6 +398,41 @@ def _read_vcf_vcfpy(vcf_path: Path) -> tuple[list[str], list[dict]]:
     return sample_names, records
 
 
+def _cyvcf2_record_to_dict(record, sample_names: list[str]) -> dict:
+    """Convert a cyvcf2 Variant to our standard record dict (same shape as _vcfpy_record_to_dict)."""
+    alts = [str(a) for a in (record.ALT or [])]
+    info = dict(record.INFO)
+    format_keys = list(record.FORMAT) if record.FORMAT else []
+    samples = {}
+    if sample_names and format_keys:
+        raw = record.format(format_keys[0])
+        n_s = len(raw) if raw is not None else 0
+        for si, sname in enumerate(sample_names):
+            if si >= n_s:
+                break
+            samples[sname] = {
+                k: _format_value_for_display(record, k, si) for k in format_keys
+            }
+    return {
+        "chrom": record.CHROM,
+        "pos": record.POS,
+        "ref": record.REF,
+        "alts": alts,
+        "info": info,
+        "samples": samples,
+        "format": format_keys,
+    }
+
+
+def _read_vcf_cyvcf2(vcf_path: Path) -> tuple[list[str], list[dict]]:
+    """Read VCF with cyvcf2; return (sample_names, list of record dicts)."""
+    vcf = VCF(str(vcf_path))
+    sample_names = list(vcf.samples)
+    records = [_cyvcf2_record_to_dict(rec, sample_names) for rec in vcf]
+    vcf.close()
+    return sample_names, records
+
+
 def _read_vcf_records(vcf_path: Path) -> tuple[list[str], list[dict]]:
     """Read VCF file with built-in text parser (tolerates Ion Reporter FUNC / semicolons in INFO)."""
     sample_names = []
@@ -477,16 +649,16 @@ def build_report(record, sample_name: str | None = None) -> str:
         lines.append("Consult ClinVar, Franklin Genoox, VarSome and literature (PubMed / population databases) for how this variant affects the gene and protein.")
     lines.append("")
 
-    # 4. Population frequencies (from MyVariant.info lookup when available)
+    # 4. Population frequencies (MyVariant.info when available)
     lines.append("4.")
-    pop_freq = None
-    if LOOKUP_AVAILABLE and lookup_gnomad_exac and alts:
+    step4_msg = None
+    if alts:
         try:
-            pop_freq = lookup_gnomad_exac(chrom, pos, ref, alts[0])
+            step4_msg = _step4_population_message(chrom, pos, ref, alts[0])
         except Exception:
             pass
-    if pop_freq and (pop_freq.gnomad_af_max is not None or pop_freq.exac_af is not None):
-        lines.append(pop_freq.step4_message())
+    if step4_msg:
+        lines.append(step4_msg)
     else:
         lines.append("Population frequencies (gnomAD max, ExAC) are not available in this VCF. Check Franklin Genoox variant assessment or state: absent from major databases.")
     lines.append("")
@@ -544,11 +716,17 @@ def main() -> int:
         return 1
 
     sample_names, records = [], []
-    # Prefer text-based reader first (handles Ion Reporter / non-standard INFO); fall back to vcfpy
-    try:
-        sample_names, records = _read_vcf_records(vcf_path)
-    except Exception:
-        pass
+    # Prefer cyvcf2; fall back to text parser then vcfpy
+    if CYVCF2_AVAILABLE:
+        try:
+            sample_names, records = _read_vcf_cyvcf2(vcf_path)
+        except Exception:
+            pass
+    if not records:
+        try:
+            sample_names, records = _read_vcf_records(vcf_path)
+        except Exception:
+            pass
     if not records and VCFPY_AVAILABLE:
         try:
             sample_names, records = _read_vcf_vcfpy(vcf_path)
